@@ -201,7 +201,10 @@ def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
         # Add reference to source stage in override file
         source_stage = Usd.Stage.Open(library.file_path)
         source_stage_path = Path(source_stage.GetRootLayer().realPath).as_posix()
-        override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
+
+        # TODO Need to filter out unused libraries (if the library objects don't have blender objects un then skip them)
+        if not source_stage_path in override_stage.GetRootLayer().subLayerPaths:
+            override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
 
         generate_usd_overrides_for_prims(   
             source_stage=source_stage,

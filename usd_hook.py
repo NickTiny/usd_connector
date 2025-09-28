@@ -40,8 +40,15 @@ class USDConnectorMetadataSet(bpy.types.USDHook):
 
         stage: Usd.Stage = import_context.get_stage()
 
+        libraries = bpy.context.scene.usd_connect_libraries
+
+        lib_name = Path(stage.GetRootLayer().realPath).name
+        if libraries.get(lib_name):
+            lib_name = f"{lib_name}_{len(libraries)}"
+
         library = bpy.context.scene.usd_connect_libraries.add()
-        library.name = Path(stage.GetRootLayer().realPath).name
+
+        library.name = lib_name
         library.file_path = stage.GetRootLayer().realPath
 
         # Store prim path as a string on each data block created
