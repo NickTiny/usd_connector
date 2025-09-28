@@ -1,0 +1,10 @@
+TODOs
+ - [ ] Setup addon
+ - [ ] Register USD Hook
+ - [ ] Create proeprty group on objects
+ - [ ] Create collection group for libraries on window manager
+
+
+Things to consider
+ - [ ] Should I register USDConnect props on all ID types or on each supported ID explictly, Object, Material, Mesh, Curve, Light etc
+

@@ -19,16 +19,12 @@ bl_info = {
 
 import bpy
 import bpy.types
-import textwrap
+from pathlib import Path
 
 # Make `pxr` module available, for running as `bpy` PIP package.
 bpy.utils.expose_bundled_modules()
 
-import pxr.Gf as Gf
-import pxr.Sdf as Sdf
-import pxr.Usd as Usd
-import pxr.UsdShade as UsdShade
-
+from pxr import Sdf, Usd
 
 class USDConnectorMetadataSet(bpy.types.USDHook):
     """Example implementation of USD IO hooks"""
@@ -36,15 +32,28 @@ class USDConnectorMetadataSet(bpy.types.USDHook):
     bl_label = "usd_connector_metadata_set"
 
     @staticmethod
-    def on_import(import_context):
+    def on_import(import_context) -> None:
         """ Set metadata on imported data blocks for use in generation of USD Overrides and resyncing."""
         # Get prim to data block mapping
-        prim_map = import_context.get_prim_map()
-        
+        prim_map: dict[Sdf.Path, list[bpy.types.ID]] = import_context.get_prim_map()
+
+        stage: Usd.Stage = import_context.get_stage()
+
+        library = bpy.context.scene.usd_connect_libraries.add()
+        library.name = Path(stage.GetRootLayer().realPath).name
+        library.file_path = stage.GetRootLayer().realPath
+
         # Store prim path as a string on each data block created
         for prim_path, data_blocks in prim_map.items():
+            prim_path: Sdf.Path
+            data_blocks: list[bpy.types.ID]
             for data_block in data_blocks:
-                data_block["prim_path"] = str(prim_path)
+                usdprops = data_block.usd_connect_props
+                usdprops.prim_path = str(prim_path)
+                usdprops.library_name = library.name
+                usdprops.library_scene = library.id_data
+
+        print(usdprops.library_get())
 
 
 def register():
