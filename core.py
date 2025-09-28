@@ -6,12 +6,23 @@ bpy.utils.expose_bundled_modules()
 
 from pxr import Usd, UsdGeom
 from typing import List
+from . import constants
 
 def get_datablock_from_prim(blender_prim: Usd.Prim) -> dict:
+    name = None
+
     if blender_prim.HasProperty("userProperties:blender:object_name"):
         name = blender_prim.GetProperty("userProperties:blender:object_name").Get()
-        return bpy.data.objects.get(name)
 
+    if blender_prim.HasProperty("userProperties:blender:data_name"):
+        name = blender_prim.GetProperty("userProperties:blender:data_name").Get()
+
+    if not name:
+        return
+
+    data_block_type = constants.get_datablock_type(blender_prim.GetTypeName())
+    if data_block_type:
+        return data_block_type.get(name)
 
 def has_source_prim(blender_prim: Usd.Prim, source_stage: Usd.Stage) -> bool:
     """Check if the given Blender prim has a corresponding source prim in the source stage.
