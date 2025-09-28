@@ -8,7 +8,7 @@ TODOs
 - [x] Make override generation more generic
    - [x] Document/plan what objects are easiest to support, find workaround for rest (make a list of to implement stuff in README)
 - [x] Make TODO list for accomodating import settings at least scaling settings, can I even get the import settings or do i need to make my own import wrapper?
-- [ ] Handle materials
+- [x] Handle materials
 - [ ] Create Custom Importer/Exporter so we can control settings (only allow settings on import and apply inverse at output)
 - [ ] Handle Import/Export differences 
 - [ ] Add attribute to library for ignore properties (such as blender name) make optional
@@ -20,5 +20,5 @@ Things to consider
 
 
 Supporting Othr Datablock types
-- [ ] Review how materials to support
+- [x] Review how materials to support
 - [ ] Need to test other datablock types TODO

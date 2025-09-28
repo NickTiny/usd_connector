@@ -83,7 +83,52 @@ def get_matching_prims(source_stage:Usd.Stage, blender_prims:List[Usd.Prim]) -> 
     return matched_blender_prims    
 
 
-def override_prim_attributes(
+def override_property(
+    src_prim: Usd.Prim, trg_prop: Usd.Property, override_stage: Usd.Stage
+):
+    src_prop = src_prim.GetProperty(trg_prop.GetName())
+
+    if not src_prop:
+        print(f"PROP: Missing '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
+        return
+
+    if hasattr(src_prop, "GetTargets"):
+        # Special Property Handling
+        if src_prop.GetTargets() != trg_prop.GetTargets():
+            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim.GetProperty(trg_prop.GetName()).SetTargets(
+                trg_prop.GetTargets()
+            )
+            print(f"PROP: Overrided  '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
+            return
+
+    # Skip attributes that don't have get (relationships AFAIK)
+    if hasattr(trg_prop, "Get"):
+        if src_prop.Get() != trg_prop.Get():
+            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim.GetProperty(trg_prop.GetName()).Set(trg_prop.Get())
+            print(f"PROP: Overrided '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
+            return
+
+
+def override_attribute(
+    src_prim: Usd.Prim, trg_attr: Usd.Attribute, override_stage: Usd.Stage
+):
+    if src_prim.HasAttribute(trg_attr.GetName()):
+        if src_prim.GetAttribute(trg_attr.GetName()).Get() != trg_attr.Get():
+            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim.GetAttribute(trg_attr.GetName()).Set(trg_attr.Get())
+            print(f"ATTR: Overrided '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
+    else:
+        override_prim = override_stage.OverridePrim(src_prim.GetPath())
+        # Attribute doesn't exist on source prim, add it
+        override_prim.CreateAttribute(trg_attr.GetName(), trg_attr.GetTypeName()).Set(
+            trg_attr.Get()
+        )
+        print(f"ATTR: Created '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
+
+
+def override_prim_attributes_and_properties(
     blender_prim: Usd.Prim, source_prim: Usd.Prim, override_stage: Usd.Stage
 ) -> None:
     """Override the attribute of a prim in the override stage if it differs from the source stage.
@@ -96,24 +141,12 @@ def override_prim_attributes(
     # TODO Handle in a more generic way and support other attributes
     # This is good for demo purposes, but not a general solution
 
-    for attr in blender_prim.GetAttributes():
-        # If Attribute exists on source prim and value is different, override it
-        if source_prim.HasAttribute(attr.GetName()):
-            if source_prim.GetAttribute(attr.GetName()).Get() != attr.Get():
-                override_prim = override_stage.OverridePrim(source_prim.GetPath())
-                override_prim.GetAttribute(attr.GetName()).Set(attr.Get())
-                print(
-                    f"Overriding attribute {attr.GetName()} on prim {source_prim.GetPath()}"
-                )
-        else:
-            override_prim = override_stage.OverridePrim(source_prim.GetPath())
-            # Attribute doesn't exist on source prim, add it
-            override_prim.CreateAttribute(attr.GetName(), attr.GetTypeName()).Set(
-                attr.Get()
-            )
-            print(
-                f"Adding new attribute {attr.GetName()} on prim {source_prim.GetPath()}"
-            )
+    for bl_attr in blender_prim.GetAttributes():
+        override_attribute(source_prim, bl_attr, override_stage)
+
+    for bl_prop in blender_prim.GetProperties():
+        # If Property exists on source prim and value is different, override it
+        override_property(source_prim, bl_prop, override_stage)
 
 
 def get_unmatched_prims(blender_prims:List[Usd.Prim], matched_blender_prims:dict[Usd.Prim, Usd.Prim]) -> List[Usd.Prim]:
@@ -140,10 +173,10 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
     # Figure out if prims have been modified
     for bl_prim, src_prim in matched_prims.items():
         # check_matching_prims(bl_prim, src_prim)
-        override_prim_attributes(bl_prim, src_prim, override_stage)
+        override_prim_attributes_and_properties(bl_prim, src_prim, override_stage)
 
     for unmatched in unmatched_prims:
-        print(f"Skipping Unmatched prim: {unmatched.GetPath()}")
+        print(f"PRIM: Skipped Unmatched: {unmatched.GetPath()}")
 
 def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
     # Create Stage to Generate Overrides onto
