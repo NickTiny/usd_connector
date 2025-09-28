@@ -11,13 +11,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 import bpy
-
-bl_info = {
-    "name": "USD Hook Example",
-    "blender": (4, 4, 0),
-}
-
-import bpy
 import bpy.types
 from pathlib import Path
 from . import core
