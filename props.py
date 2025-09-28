@@ -1,9 +1,6 @@
 import bpy
 
 
-
-
-
 class USDConnectLibraries(bpy.types.PropertyGroup):
     """Information specific to each Library is stored here."""
 
@@ -28,22 +25,29 @@ class USDConnectLibraries(bpy.types.PropertyGroup):
         default="",
     )
 
+    import_scale: bpy.props.FloatProperty(  # type: ignore
+        name="Import Scale",
+        description="Scale that was applied to the USD file at import time",
+        default=1.0,
+        min=0.0001,
+        max=1000.0,
+    )
+
 class USDConnectIDProps(bpy.types.PropertyGroup):
     """Information specific to each Prim is stored here."""
 
-    
     prim_path : bpy.props.StringProperty(  # type: ignore
         name="Prim Path",
         description="Path to the USD prim that this object represents",
         default="",
     )
-    
+
     library_name : bpy.props.StringProperty(  # type: ignore
         name="Library Name",
         description="Name of the USD library that this prim came from",
         default="",
     )
-    
+
     # TODO Pointer to collections in UI sometimes slow down performance. Scene may as well, requires investigation.
     # Only matters if used in UI
     library_scene : bpy.props.PointerProperty(  # type: ignore
@@ -58,7 +62,6 @@ class USDConnectIDProps(bpy.types.PropertyGroup):
             return self.library_scene.usd_connect_libraries.get(self.library_name)
         return None
 
-    
 
 # ----------------REGISTER--------------.
 
@@ -92,4 +95,3 @@ def unregister():
 
     del bpy.types.ID.usd_connect_props
     del bpy.types.Scene.usd_connect_libraries
-

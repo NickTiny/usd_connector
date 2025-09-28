@@ -11,13 +11,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from . import usd_hook, props
+from . import usd_hook, props, ops, ui
 
 
 def register():
     usd_hook.register()
     props.register()
+    ops.register()
+    ui.register()
 
 def unregister():
     usd_hook.unregister()
     props.unregister()
+    ops.unregister()
+    ui.unregister()

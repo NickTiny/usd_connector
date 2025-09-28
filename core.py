@@ -93,6 +93,11 @@ def override_property(
         return
 
     if hasattr(src_prop, "GetTargets"):
+        if trg_prop.GetTargets() is None:
+            print(
+                f"PROP: Targets None '{trg_prop.GetName()}' on '{src_prim.GetPath()}'"
+            )
+            return
         # Special Property Handling
         if src_prop.GetTargets() != trg_prop.GetTargets():
             override_prim = override_stage.OverridePrim(src_prim.GetPath())
@@ -104,6 +109,11 @@ def override_property(
 
     # Skip attributes that don't have get (relationships AFAIK)
     if hasattr(trg_prop, "Get"):
+        if trg_prop.Get() is None:
+            print(
+                f"PROP: Targets None '{trg_prop.GetName()}' on '{src_prim.GetPath()}'"
+            )
+            return
         if src_prop.Get() != trg_prop.Get():
             override_prim = override_stage.OverridePrim(src_prim.GetPath())
             override_prim.GetProperty(trg_prop.GetName()).Set(trg_prop.Get())
@@ -114,6 +124,10 @@ def override_property(
 def override_attribute(
     src_prim: Usd.Prim, trg_attr: Usd.Attribute, override_stage: Usd.Stage
 ):
+    if trg_attr.Get() is None:
+        print(f"ATTR: Targets None '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
+        return
+
     if src_prim.HasAttribute(trg_attr.GetName()):
         if src_prim.GetAttribute(trg_attr.GetName()).Get() != trg_attr.Get():
             override_prim = override_stage.OverridePrim(src_prim.GetPath())

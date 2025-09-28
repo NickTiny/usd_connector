@@ -39,7 +39,9 @@ class USDConnectorMetadataSet(bpy.types.USDHook):
         if libraries.get(lib_name):
             lib_name = f"{lib_name}_{len(libraries)}"
 
-        library = bpy.context.scene.usd_connect_libraries.add()
+        # TODO Due to exporter limitations we only support one library for now
+        libraries.clear()
+        library = libraries.add()
 
         library.name = lib_name
         library.file_path = stage.GetRootLayer().realPath
@@ -79,7 +81,7 @@ class USDCOnnectGenerateOverrides(bpy.types.Operator):
 
 
 classes = [
-    USDConnectorMetadataSet,
+    # USDConnectorMetadataSet, # This is registered on demand when required
     USDCOnnectGenerateOverrides,
 ]
 
