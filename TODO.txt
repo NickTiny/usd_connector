@@ -1,10 +1,16 @@
 TODOs
- - [ ] Setup addon
- - [ ] Register USD Hook
- - [ ] Create proeprty group on objects
- - [ ] Create collection group for libraries on window manager
-
+ - [x] Setup addon
+ - [x] Register USD Hook
+ - [x] Create proeprty group on objects
+ - [x] Create collection group for libraries on window manager
+ - [ ] Add existing Blender to USD override code
+    - [ ] Does on export hook work post file save, or do  
+- [ ] Make override generation more generic
+   - [ ] Document/plan what objects are easiest to support, find workaround for rest (make a list of to implement stuff in README)
+- [ ] Make TODO list for accomodating import settings at least scaling settings, can I even get the import settings or do i need to make my own import wrapper?
+- [ ] 
 
 Things to consider
+ - [ ] Is there a good way of getting all IDs that are registered to a given library, maybe a collection property of pointers to objects? TBD if needed
  - [ ] Should I register USDConnect props on all ID types or on each supported ID explictly, Object, Material, Mesh, Curve, Light etc
 
