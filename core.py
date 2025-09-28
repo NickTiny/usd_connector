@@ -4,7 +4,7 @@ from pathlib import Path
 # Make `pxr` module available, for running as `bpy` PIP package.
 bpy.utils.expose_bundled_modules()
 
-from pxr import Usd, UsdGeom
+from pxr import Usd, UsdGeom, Sdf
 from typing import List
 from . import constants
 
@@ -176,7 +176,18 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
         override_prim_attributes_and_properties(bl_prim, src_prim, override_stage)
 
     for unmatched in unmatched_prims:
-        print(f"PRIM: Skipped Unmatched: {unmatched.GetPath()}")
+        # print(f"PRIM: Skipped Unmatched: {unmatched.GetPath()}")
+        new_prim = override_stage.DefinePrim(
+            unmatched.GetPath(), unmatched.GetTypeName()
+        )
+        print(f"PRIM: Created New Prim: {new_prim.GetPath()}")
+        Sdf.CopySpec(
+            bl_stage.GetRootLayer(),
+            unmatched.GetPath(),
+            override_stage.GetRootLayer(),
+            new_prim.GetPath(),
+        )
+
 
 def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
     # Create Stage to Generate Overrides onto
