@@ -45,7 +45,8 @@ class USDConnectorMetadataSet(bpy.types.USDHook):
 
         library.name = lib_name
         library.file_path = stage.GetRootLayer().realPath
-
+        library.root_prim_path = str(stage.GetDefaultPrim().GetPath())
+        
         # Store prim path as a string on each data block created
         for prim_path, data_blocks in prim_map.items():
             prim_path: Sdf.Path

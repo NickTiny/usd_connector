@@ -51,7 +51,7 @@ class USDConnectorImporter(bpy.types.Operator):
         min=0.0001,
         max=1000.0,
     )
-    
+
     def draw(self, context) -> None:
         layout = self.layout
         layout.prop(self, "scale", text="Scale")
@@ -60,10 +60,7 @@ class USDConnectorImporter(bpy.types.Operator):
         bpy.utils.register_class(USDConnectorMetadataSet)
         bpy.ops.wm.usd_import(filepath=self.filepath, scale=self.scale)
         bpy.utils.unregister_class(USDConnectorMetadataSet)
-        
-        library = context.scene.usd_connect_libraries[-1]
-        library.import_scale = self.scale
-        
+
         return {'FINISHED'}
 
     def invoke(self, context, event) -> {'RUNNING_MODAL'}:
@@ -77,17 +74,14 @@ class USDConnectorExporter(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # type: ignore
-    
+
     def execute(self, context) -> {'FINISHED'}:
         if len(context.scene.usd_connect_libraries) != 1:
             self.report({'ERROR'}, "USD Library not found.")
             return {'CANCELLED'}
-        
-        # TODO Due to exporter limitations we only support one library for now
-        import_library = context.scene.usd_connect_libraries[-1]
 
         bpy.utils.register_class(USDConnectorMetadataSet)
-        bpy.ops.wm.usd_export(filepath=self.filepath, convert_scene_units="CUSTOM", meters_per_unit=import_library.import_scale)
+        bpy.ops.wm.usd_export(filepath=self.filepath)
         bpy.utils.unregister_class(USDConnectorMetadataSet)
 
         return {'FINISHED'}
@@ -97,7 +91,6 @@ class USDConnectorExporter(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
-    
 classes = [
     USDConnectorImporter,USDConnectorExporter
 ]   

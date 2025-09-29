@@ -203,6 +203,38 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
         )
 
 
+def apply_world_transform(source_prim: Usd.Prim, target_prim: Usd.Prim) -> None:
+
+    source_xform = UsdGeom.Xformable(source_prim)
+    target_xform = UsdGeom.Xformable(target_prim)
+
+    # TODO support rotation
+
+    if not target_xform.GetTranslateOp().IsDefined():
+        target_xform.AddTranslateOp()
+
+    if not target_xform.GetScaleOp().IsDefined():
+        target_xform.AddScaleOp()
+
+    world_transform_matrix = source_xform.ComputeLocalToWorldTransform(
+        Usd.TimeCode.Default()
+    )
+
+    scale = Gf.Vec3f(
+        world_transform_matrix.ExtractRotationMatrix().GetRow(0).GetLength(),
+        world_transform_matrix.ExtractRotationMatrix().GetRow(1).GetLength(),
+        world_transform_matrix.ExtractRotationMatrix().GetRow(2).GetLength(),
+    )
+
+    target_xform.GetTranslateOp().Set(world_transform_matrix.ExtractTranslation())
+
+    # xformable_override.GetRotateXYZOp().Set(
+    #     world_transform_matrix.ExtractRotationMatrix()
+    # )
+
+    target_xform.GetScaleOp().Set(scale)
+
+
 def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
     # Create Stage to Generate Overrides onto
     bl_stage_path = Path(bl_stage.GetRootLayer().realPath)
@@ -225,5 +257,18 @@ def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
             override_stage=override_stage,
             bl_stage=bl_stage,
         )
+
+        BL_ROOT_PRIM = "/root"
+
+        world_override = override_stage.OverridePrim(library.root_prim_path)
+        world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
+
+        apply_world_transform(world_bl, world_override)
+
+        root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
+        root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
+
+        if root_bl:
+            apply_world_transform(root_bl, root_override)
 
     override_stage.Save()

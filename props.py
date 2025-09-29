@@ -25,12 +25,10 @@ class USDConnectLibraries(bpy.types.PropertyGroup):
         default="",
     )
 
-    import_scale: bpy.props.FloatProperty(  # type: ignore
-        name="Import Scale",
-        description="Scale that was applied to the USD file at import time",
-        default=1.0,
-        min=0.0001,
-        max=1000.0,
+    root_prim_path: bpy.props.StringProperty(  # type: ignore
+        name="Root Prim Path",
+        description="Path to the root prim of the imported USD file",
+        default="",
     )
 
 class USDConnectIDProps(bpy.types.PropertyGroup):
