@@ -282,12 +282,13 @@ def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
         world_override = override_stage.OverridePrim(library.root_prim_path)
         world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
 
-        apply_world_transform(world_bl, world_override)
+        if world_bl.IsValid() and world_override.IsValid():
+            apply_world_transform(world_bl, world_override)
 
         root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
         root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
 
-        if root_bl:
+        if root_bl.IsValid() and root_override.IsValid():
             apply_world_transform(root_bl, root_override)
 
     override_stage.Save()
