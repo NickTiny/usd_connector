@@ -9,6 +9,11 @@ from typing import List
 from . import constants
 
 
+IGNORE_PROPS = [
+    "userProperties:blender:object_name",
+    "userProperties:blender:data_name",
+]
+
 def get_override_prim(src_prim: Usd.Prim, override_stage: Usd.Stage) -> Usd.Prim:
     try:
         override_prim = override_stage.OverridePrim(src_prim.GetPath())
@@ -97,6 +102,8 @@ def get_matching_prims(source_stage:Usd.Stage, blender_prims:List[Usd.Prim]) -> 
 def override_property(
     src_prim: Usd.Prim, trg_prop: Usd.Property, override_stage: Usd.Stage
 ):
+    if trg_prop.GetName() in IGNORE_PROPS:
+        return
     src_prop = src_prim.GetProperty(trg_prop.GetName())
 
     if not src_prop:
@@ -139,6 +146,8 @@ def override_property(
 def override_attribute(
     src_prim: Usd.Prim, trg_attr: Usd.Attribute, override_stage: Usd.Stage
 ):
+    if trg_attr.GetName() in IGNORE_PROPS:
+        return
     if trg_attr.Get() is None:
         print(f"ATTR: Targets None '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
         return
