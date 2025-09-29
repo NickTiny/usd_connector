@@ -4,9 +4,20 @@ from pathlib import Path
 # Make `pxr` module available, for running as `bpy` PIP package.
 bpy.utils.expose_bundled_modules()
 
-from pxr import Usd, UsdGeom, Sdf
+from pxr import Usd, UsdGeom, Sdf, Gf
 from typing import List
 from . import constants
+
+
+def get_override_prim(src_prim: Usd.Prim, override_stage: Usd.Stage) -> Usd.Prim:
+    try:
+        override_prim = override_stage.OverridePrim(src_prim.GetPath())
+    except Exception as e:
+        print(f"Error getting override prim: {e}")
+        return
+    print(f"PRIM: Overriding Prim: {src_prim.GetPath()}")
+    return override_prim
+
 
 def get_datablock_from_prim(blender_prim: Usd.Prim) -> dict:
     name = None
@@ -100,7 +111,9 @@ def override_property(
             return
         # Special Property Handling
         if src_prop.GetTargets() != trg_prop.GetTargets():
-            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim = get_override_prim(src_prim, override_stage)
+            if not override_prim:
+                return
             override_prim.GetProperty(trg_prop.GetName()).SetTargets(
                 trg_prop.GetTargets()
             )
@@ -115,7 +128,9 @@ def override_property(
             )
             return
         if src_prop.Get() != trg_prop.Get():
-            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim = get_override_prim(src_prim, override_stage)
+            if not override_prim:
+                return
             override_prim.GetProperty(trg_prop.GetName()).Set(trg_prop.Get())
             print(f"PROP: Overrided '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
             return
@@ -130,11 +145,15 @@ def override_attribute(
 
     if src_prim.HasAttribute(trg_attr.GetName()):
         if src_prim.GetAttribute(trg_attr.GetName()).Get() != trg_attr.Get():
-            override_prim = override_stage.OverridePrim(src_prim.GetPath())
+            override_prim = get_override_prim(src_prim, override_stage)
+            if not override_prim:
+                return
             override_prim.GetAttribute(trg_attr.GetName()).Set(trg_attr.Get())
             print(f"ATTR: Overrided '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
     else:
-        override_prim = override_stage.OverridePrim(src_prim.GetPath())
+        override_prim = get_override_prim(src_prim, override_stage)
+        if not override_prim:
+            return
         # Attribute doesn't exist on source prim, add it
         override_prim.CreateAttribute(trg_attr.GetName(), trg_attr.GetTypeName()).Set(
             trg_attr.Get()
