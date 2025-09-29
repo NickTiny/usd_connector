@@ -5,8 +5,9 @@ from pathlib import Path
 bpy.utils.expose_bundled_modules()
 
 from pxr import Usd, UsdGeom, Sdf, Gf
-from typing import List
+from typing import List, Any, Union
 from . import constants
+import math
 
 
 IGNORE_PROPS = [
@@ -39,6 +40,99 @@ def get_datablock_from_prim(blender_prim: Usd.Prim) -> dict:
     data_block_type = constants.get_datablock_type(blender_prim.GetTypeName())
     if data_block_type:
         return data_block_type.get(name)
+
+
+def compare_usd_values(value1: Any, value2: Any, precision: int = 2) -> bool:
+    """Compare two USD values with customizable precision for floating point numbers.
+
+    This function handles various USD types including Vec3d, Vec3f, Vec2d, Vec2f,
+    matrices, quaternions, and other numerical types, rounding them to the specified
+    precision before comparison.
+
+    Args:
+        value1 (Any): First value to compare
+        value2 (Any): Second value to compare
+        precision (int): Number of decimal places to round to for floating point comparisons
+
+    Returns:
+        bool: True if values are equal (within precision), False otherwise
+    """
+    if value1 is None and value2 is None:
+        return True
+    if value1 is None or value2 is None:
+        return False
+
+    # Handle different USD types
+    if type(value1) != type(value2):
+        return False
+
+    if value1 == value2:
+        return True
+
+    # USD Array types (Vt.Vec3fArray, Vt.FloatArray, etc.)
+    if hasattr(value1, '__class__') and 'Array' in str(type(value1)):
+        try:
+            if len(value1) != len(value2):
+                return False
+            for i in range(len(value1)):
+                if not compare_usd_values(value1[i], value2[i], precision):
+                    return False
+            return True
+        except (TypeError, IndexError, AttributeError):
+            pass
+
+    # Vector types (Vec3d, Vec3f, Vec2d, Vec2f, etc.)
+    if hasattr(value1, '__len__') and hasattr(value1, '__getitem__'):
+        try:
+            if len(value1) != len(value2):
+                return False
+            for i in range(len(value1)):
+                if isinstance(value1[i], (float, int)):
+                    if round(float(value1[i]), precision) != round(
+                        float(value2[i]), precision
+                    ):
+                        return False
+                else:
+                    if value1[i] != value2[i]:
+                        return False
+            return True
+        except (TypeError, IndexError):
+            pass
+
+    # Matrix types (GfMatrix4d, GfMatrix3d, etc.)
+    if hasattr(value1, 'GetRow') and hasattr(value1, 'GetNumRows'):
+        try:
+            if value1.GetNumRows() != value2.GetNumRows():
+                return False
+            for row in range(value1.GetNumRows()):
+                if not compare_usd_values(
+                    value1.GetRow(row), value2.GetRow(row), precision
+                ):
+                    return False
+            return True
+        except (TypeError, AttributeError):
+            pass
+
+    # Quaternion types
+    if hasattr(value1, 'GetReal') and hasattr(value1, 'GetImaginary'):
+        try:
+            real_equal = round(float(value1.GetReal()), precision) == round(
+                float(value2.GetReal()), precision
+            )
+            imag_equal = compare_usd_values(
+                value1.GetImaginary(), value2.GetImaginary(), precision
+            )
+            return real_equal and imag_equal
+        except (TypeError, AttributeError):
+            pass
+
+    # Single floating point numbers
+    if isinstance(value1, (float, int)) and isinstance(value2, (float, int)):
+        return round(float(value1), precision) == round(float(value2), precision)
+
+    # Fallback to direct comparison for other types (strings, bools, etc.)
+    return value1 == value2
+
 
 def has_source_prim(blender_prim: Usd.Prim, source_stage: Usd.Stage) -> bool:
     """Check if the given Blender prim has a corresponding source prim in the source stage.
@@ -117,7 +211,7 @@ def override_property(
             )
             return
         # Special Property Handling
-        if src_prop.GetTargets() != trg_prop.GetTargets():
+        if not compare_usd_values(src_prop.GetTargets(), trg_prop.GetTargets()):
             override_prim = get_override_prim(src_prim, override_stage)
             if not override_prim:
                 return
@@ -134,7 +228,7 @@ def override_property(
                 f"PROP: Targets None '{trg_prop.GetName()}' on '{src_prim.GetPath()}'"
             )
             return
-        if src_prop.Get() != trg_prop.Get():
+        if not compare_usd_values(src_prop.Get(), trg_prop.Get()):
             override_prim = get_override_prim(src_prim, override_stage)
             if not override_prim:
                 return
@@ -144,8 +238,11 @@ def override_property(
 
 
 def override_attribute(
-    src_prim: Usd.Prim, trg_attr: Usd.Attribute, override_stage: Usd.Stage
+    src_prim: Usd.Prim,
+    trg_attr: Usd.Attribute,
+    override_stage: Usd.Stage,
 ):
+
     if trg_attr.GetName() in IGNORE_PROPS:
         return
     if trg_attr.Get() is None:
@@ -153,7 +250,10 @@ def override_attribute(
         return
 
     if src_prim.HasAttribute(trg_attr.GetName()):
-        if src_prim.GetAttribute(trg_attr.GetName()).Get() != trg_attr.Get():
+        src_value = src_prim.GetAttribute(trg_attr.GetName()).Get()
+        trg_value = trg_attr.Get()
+
+        if not compare_usd_values(src_value, trg_value):
             override_prim = get_override_prim(src_prim, override_stage)
             if not override_prim:
                 return
