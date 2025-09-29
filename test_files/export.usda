@@ -1,0 +1,106 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    doc = "Blender v4.5.3 LTS"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "root" (
+    customData = {
+        dictionary Blender = {
+            bool generated = 1
+        }
+    }
+)
+{
+    def Scope "_materials"
+    {
+        custom string userProperties:blender:object_name = "_materials"
+
+        def Material "Material_002"
+        {
+            token outputs:surface.connect = </root/_materials/Material_002/Principled_BSDF.outputs:surface>
+            custom string userProperties:blender:data_name = "Material_002"
+
+            def Shader "Principled_BSDF"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0
+                float inputs:clearcoatRoughness = 0.03
+                color3f inputs:diffuseColor = (0.8002356, 0.0070494935, 0)
+                float inputs:ior = 1.5
+                float inputs:metallic = 0
+                float inputs:opacity = 1
+                float inputs:roughness = 0.5
+                float inputs:specular = 0.5
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "Cube_002"
+    {
+        custom string userProperties:blender:object_name = "Cube_002"
+        float3 xformOp:rotateXYZ = (0, -0, 0)
+        float3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (1.5537594556808472, 3.5268006324768066, 0.007351870648562908)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+
+        def Mesh "Cube_002" (
+            active = true
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [0, 1, 3, 2, 2, 3, 7, 6, 6, 7, 5, 4, 4, 5, 1, 0, 2, 6, 4, 0, 7, 3, 1, 5]
+            rel material:binding = </root/_materials/Material_002>
+            normal3f[] normals = [(-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (0.16157514, 0.97354347, 0.16157512), (0.16157514, 0.97354347, 0.16157512), (0.16157514, 0.97354347, 0.16157512), (0.16157514, 0.97354347, 0.16157512), (0.99538445, 0.06785965, 0.06785969), (0.99538445, 0.06785965, 0.06785969), (0.99538445, 0.06785965, 0.06785969), (0.99538445, 0.06785965, 0.06785969), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0.026327772, 0.026327772, 0.99930656), (0.026327772, 0.026327772, 0.99930656), (0.026327772, 0.026327772, 0.99930656), (0.026327772, 0.026327772, 0.99930656)] (
+                interpolation = "faceVarying"
+            )
+            point3f[] points = [(-1, -1, -1), (-1, -1, 1), (-1, 1, -1), (-1, 1, 1), (1, -1, -1), (1, -1, 1), (1, 1, -1), (0.7747494, 0.38734627, 0.9166913)]
+            texCoord2f[] primvars:st = [(0.375, 0), (0.625, 0), (0.625, 0.25), (0.375, 0.25), (0.375, 0.25), (0.625, 0.25), (0.625, 0.5), (0.375, 0.5), (0.375, 0.5), (0.625, 0.5), (0.625, 0.75), (0.375, 0.75), (0.375, 0.75), (0.625, 0.75), (0.625, 1), (0.375, 1), (0.125, 0.5), (0.375, 0.5), (0.375, 0.75), (0.125, 0.75), (0.625, 0.5), (0.875, 0.5), (0.875, 0.75), (0.625, 0.75)] (
+                interpolation = "faceVarying"
+            )
+            uniform token subdivisionScheme = "none"
+            custom string userProperties:blender:data_name = "Cube_002"
+        }
+    }
+
+    def Xform "Cube_001"
+    {
+        custom string userProperties:blender:object_name = "Cube_001"
+
+        def Mesh "Cube_001" (
+            active = true
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [0, 1, 3, 2, 2, 3, 7, 6, 6, 7, 5, 4, 4, 5, 1, 0, 2, 6, 4, 0, 7, 3, 1, 5]
+            rel material:binding = </root/_materials/Material_002>
+            normal3f[] normals = [(-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+                interpolation = "faceVarying"
+            )
+            point3f[] points = [(-1, -1, -1), (-1, -1, 1), (-1, 1, -1), (-1, 1, 1), (1, -1, -1), (1, -1, 1), (1, 1, -1), (1, 1, 1)]
+            texCoord2f[] primvars:st = [(0.375, 0), (0.625, 0), (0.625, 0.25), (0.375, 0.25), (0.375, 0.25), (0.625, 0.25), (0.625, 0.5), (0.375, 0.5), (0.375, 0.5), (0.625, 0.5), (0.625, 0.75), (0.375, 0.75), (0.375, 0.75), (0.625, 0.75), (0.625, 1), (0.375, 1), (0.125, 0.5), (0.375, 0.5), (0.375, 0.75), (0.125, 0.75), (0.625, 0.5), (0.875, 0.5), (0.875, 0.75), (0.625, 0.75)] (
+                interpolation = "faceVarying"
+            )
+            uniform token subdivisionScheme = "none"
+            custom string userProperties:blender:data_name = "Cube_001"
+        }
+    }
+
+    def DomeLight "env_light"
+    {
+        float inputs:intensity = 1
+        asset inputs:texture:file = @./textures/color_121212.hdr@
+        float3 xformOp:rotateXYZ = (90, -0, 90)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+}
+
