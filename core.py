@@ -11,6 +11,8 @@ import math
 import os
 import shutil
 import tempfile
+import contextlib
+from bpy.types import Object, ViewLayer
 
 IGNORE_PROPS = [
     "userProperties:blender:object_name",
@@ -405,7 +407,24 @@ def generate_usd_override_file(bl_stage: Usd.Stage, source_stage_path: str) -> N
     override_stage.Unload()
 
 
-def export_usd_layer(target_filepath: Path) -> None:
+@contextlib.contextmanager
+def override_object_selection(objects: List[Object], view_layer: ViewLayer):
+    object_states = {}
+    for obj in objects:
+        object_states[obj] = obj.select_get()
+
+    try:
+        for obj in objects:
+            obj.select_set(True, view_layer=view_layer)
+        yield
+    finally:
+        for obj in objects:
+            obj.select_set(object_states[obj], view_layer=view_layer)
+
+
+def export_usd_layer(
+    target_filepath: Path, selected_objects_only: bool = False
+) -> None:
     """Export the current scene to a USD file and generate overrides for the current library.
 
     NOTE: Must be called with hook registered, similar to direct operator call"""
@@ -419,14 +438,26 @@ def export_usd_layer(target_filepath: Path) -> None:
     # Hook will execute to generate override file at target filepath
     tmp_filepath = target_filepath.parent.joinpath("tmp_" + target_filepath.name)
 
-    bpy.ops.wm.usd_export(filepath=tmp_filepath.as_posix())
+    bpy.ops.wm.usd_export(
+        filepath=tmp_filepath.as_posix(),
+        selected_objects_only=selected_objects_only,
+    )
 
     # Delete Temp File after Layer is generated
     if tmp_filepath.exists():
         tmp_filepath.unlink()
 
 
-def export_refresh_usd_layer() -> None:
+def get_library_objects(library: bpy.types.Object) -> List[bpy.types.Object]:
+    """Get all objects associated with a specific USD library."""
+    return [
+        obj
+        for obj in bpy.context.scene.objects
+        if obj.usd_connect_props.library_get() == library
+    ]
+
+
+def refresh_export_usd_layer() -> None:
     """Import a USD reference file and set up the library and prim mappings.
 
     Args:
@@ -435,13 +466,18 @@ def export_refresh_usd_layer() -> None:
     """
     library = bpy.context.scene.usd_connect_libraries[0]
 
+    library_objects = get_library_objects(library)
+
     workspace = Path(library.file_path).parent
     export_path = workspace.joinpath("refresh_export.usda")
 
     old_filepath = library.file_path
     library.file_path = library.file_path_snapshot
 
-    export_usd_layer(export_path)
+    with override_object_selection(
+        objects=library_objects, view_layer=bpy.context.view_layer
+    ):
+        export_usd_layer(export_path, selected_objects_only=True)
     library.file_path = old_filepath
 
     export_stage = Usd.Stage.Open(export_path.as_posix())

@@ -14,11 +14,16 @@ TODOs
 - [x] Add Logic to "reload" usd Scene 
      - [x] Re-Open layer file 
 
+- [x] Accomodate New Blender Data during Refresh (remap data maybe?) 
 - [ ] Clean Up Test Files
 - [ ] Use Temp Directory on Refresh and Delete Data
-- [ ] Improve resync 
-   - [ ] Accomodate New Blender Data during Refresh (remap data maybe?) 
 - [ ] Resync using temp directory and clean up after the fact
+- [ ] Diff logic V2 
+   - Make snapshots an export from Blender USD
+   - Compare current export to snapshot export to get difference
+   - Apply Overrides to new stage against source file (this allows for material stuff)
+   - Use PrimTransfer class to gather up all prim data and do compariso on per prim basis
+   - Could Potentially support Mesh>Cube mapping for prim differences created by Exporter
 
 
 

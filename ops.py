@@ -77,7 +77,7 @@ class USDConnectLibraryRefresh(bpy.types.Operator):
 
         # Export the current overrides
         bpy.utils.register_class(USDConnectorMetadataSet)
-        core.export_refresh_usd_layer()
+        core.refresh_export_usd_layer()
         bpy.utils.unregister_class(USDConnectorMetadataSet)
 
         # TODO setting interval to wait for export to finish need programmatic way to ensure export is complete
@@ -96,14 +96,40 @@ def library_refresh_import() -> None:
             obj.name = "OLD_" + obj.name
             old_objs.append(obj)
 
-    for obj in old_objs:
-        bpy.data.objects.remove(obj, do_unlink=True)
-
     bpy.utils.register_class(USDConnectorMetadataSet)
 
     core.import_usd_reference(library.file_path, library.export_path)
 
     bpy.utils.unregister_class(USDConnectorMetadataSet)
+
+    new_objs = [
+        obj
+        for obj in core.get_library_objects(library)
+        if not obj.name.startswith("OLD_")
+    ]
+
+    # # Remap old objects to new objects based on root prim path
+    remap_dict = {}
+    unmapped_objs = []
+    for old_obj in old_objs:
+        matched = False
+        for new_obj in new_objs:
+            if (
+                old_obj.usd_connect_props.prim_path
+                == new_obj.usd_connect_props.prim_path
+            ):
+                remap_dict[old_obj] = new_obj
+                matched = True
+                break
+        if not matched:
+            unmapped_objs.append(old_obj)
+
+    for old_obj, new_obj in remap_dict.items():
+        old_obj.user_remap(new_obj)
+
+    # Remove Unused Objects
+    for unmapped_obj in unmapped_objs:
+        bpy.data.objects.remove(unmapped_obj, do_unlink=True)
 
 
 # class USDConnectRefreshExport(bpy.types.Operator):
