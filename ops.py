@@ -1,64 +1,30 @@
 import bpy
+import os
+from . import core
 from .usd_hook import USDConnectorMetadataSet
+from pathlib import Path
+import shutil
+
+###########################################################
+# Add Reference / Import
+###########################################################
 
 
-class USDConnectorImporter(bpy.types.Operator):
-    bl_idname = "usd.connector_importer"
-    bl_label = "Import USD with USD Connector"
-    bl_description = "Import USD file with USD Connector, applying custom settings"
+class USDConnectorAddReference(bpy.types.Operator):
+    bl_idname = "usd.connector_add_reference_import"
+    bl_label = "Import USD as Reference"
     bl_options = {'REGISTER', 'UNDO'}
 
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # type: ignore
-    scale : bpy.props.FloatProperty(  # type: ignore
-        name="Scale",
-        description="Scale to apply to imported USD",
-        default=1.0,
-        min=0.0001,
-        max=1000.0,
-    )
-    
+
     def draw(self, context) -> None:
         layout = self.layout
         layout.prop(self, "filepath", text="USD File Path")
-        layout.prop(self, "scale", text="Scale")
 
     def execute(self, context) -> {'FINISHED'}:
+
         bpy.utils.register_class(USDConnectorMetadataSet)
-        bpy.ops.wm.usd_import(filepath=self.filepath, scale=self.scale)
-        bpy.utils.unregister_class(USDConnectorMetadataSet)
-        
-        library = context.scene.usd_connect_libraries[-1]
-        library.import_scale = self.scale
-        
-        return {'FINISHED'}
-
-    def invoke(self, context, event) -> {'RUNNING_MODAL'}:
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-
-class USDConnectorImporter(bpy.types.Operator):
-    bl_idname = "usd.connector_importer"
-    bl_label = "Import USD Reference"
-    bl_description = "" # TODO Description
-    bl_options = {'REGISTER', 'UNDO'}
-
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # type: ignore
-    scale : bpy.props.FloatProperty(  # type: ignore
-        name="Scale",
-        description="Scale to apply to imported USD",
-        default=1.0,
-        min=0.0001,
-        max=1000.0,
-    )
-
-    def draw(self, context) -> None:
-        layout = self.layout
-        layout.prop(self, "scale", text="Scale")
-
-    def execute(self, context) -> {'FINISHED'}:
-        bpy.utils.register_class(USDConnectorMetadataSet)
-        bpy.ops.wm.usd_import(filepath=self.filepath, scale=self.scale)
+        core.import_usd_reference(self.filepath)
         bpy.utils.unregister_class(USDConnectorMetadataSet)
 
         return {'FINISHED'}
@@ -67,9 +33,13 @@ class USDConnectorImporter(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-class USDConnectorExporter(bpy.types.Operator):
+
+############################################################
+# Create Layer / Export
+############################################################
+class USDConnectorExportLayer(bpy.types.Operator):
     bl_idname = "usd.connector_exporter"
-    bl_label = "Export USD Layer"
+    bl_label = "Export USD as Layer"
     bl_description = "" # TODO Description
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -81,7 +51,7 @@ class USDConnectorExporter(bpy.types.Operator):
             return {'CANCELLED'}
 
         bpy.utils.register_class(USDConnectorMetadataSet)
-        bpy.ops.wm.usd_export(filepath=self.filepath)
+        core.export_usd_layer(Path(self.filepath))
         bpy.utils.unregister_class(USDConnectorMetadataSet)
 
         return {'FINISHED'}
@@ -91,13 +61,136 @@ class USDConnectorExporter(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
+############################################################
+# Refresh Library
+############################################################
+class USDConnectLibraryRefresh(bpy.types.Operator):
+    bl_idname = "usd.connector_library_refresh"
+    bl_label = "Refresh USD Reference"
+    bl_description = "Export current USD library overrides to the export path"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context) -> {'FINISHED'}:
+        if len(context.scene.usd_connect_libraries) != 1:
+            self.report({'ERROR'}, "USD Library not found.")
+            return {'CANCELLED'}
+
+        # Export the current overrides
+        bpy.utils.register_class(USDConnectorMetadataSet)
+        core.export_refresh_usd_layer()
+        bpy.utils.unregister_class(USDConnectorMetadataSet)
+
+        # TODO setting interval to wait for export to finish need programmatic way to ensure export is complete
+        bpy.app.timers.register(library_refresh_import)
+
+        return {'FINISHED'}
+
+
+def library_refresh_import() -> None:
+    """Remove all objects associated with a given library name"""
+    library = bpy.context.scene.usd_connect_libraries[-1]
+
+    old_objs = []
+    for obj in bpy.context.scene.objects:
+        if obj.usd_connect_props.library_name == library.name:
+            obj.name = "OLD_" + obj.name
+            old_objs.append(obj)
+
+    for obj in old_objs:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+    bpy.utils.register_class(USDConnectorMetadataSet)
+
+    core.import_usd_reference(library.file_path, library.export_path)
+
+    bpy.utils.unregister_class(USDConnectorMetadataSet)
+
+
+# class USDConnectRefreshExport(bpy.types.Operator):
+#     bl_idname = "usd.connector_library_export"
+#     bl_label = "Export USD Library Overrides"
+#     bl_description = "Export current USD library overrides to the export path"
+#     bl_options = {'REGISTER', 'UNDO'}
+
+#     def execute(self, context) -> {'FINISHED'}:
+#         if len(context.scene.usd_connect_libraries) != 1:
+#             self.report({'ERROR'}, "USD Library not found.")
+#             return {'CANCELLED'}
+
+#         bpy.utils.register_class(USDConnectorMetadataSet)
+#         library = context.scene.usd_connect_libraries[-1]
+
+#         # Export the current overrides
+#         bpy.ops.wm.usd_export(filepath=TARGET_EXPORT)
+
+#         bpy.utils.unregister_class(USDConnectorMetadataSet)
+#         return {'FINISHED'}
+
+
+# class USDConnectLibraryReimport(bpy.types.Operator):
+#     bl_idname = "usd.connector_library_reimport"
+#     bl_label = "Reimport USD Library"
+#     bl_description = "Delete existing USD library objects and reimport from export file"
+#     bl_options = {'REGISTER', 'UNDO'}
+
+#     def execute(self, context) -> {'FINISHED'}:
+#         if len(context.scene.usd_connect_libraries) != 1:
+#             self.report({'ERROR'}, "USD Library not found.")
+#             return {'CANCELLED'}
+
+#         bpy.utils.register_class(USDConnectorMetadataSet)
+#         library = context.scene.usd_connect_libraries[-1]
+
+#         # Delete all USD Scene Data
+#         to_remove = []
+#         for obj in context.scene.objects:
+#             if obj.usd_connect_props.library_name == library.name:
+#                 obj.name = "OLD_" + obj.name
+#                 to_remove.append(obj)
+
+#         # Re-import the library from override file
+#         os.environ["USD_CONNECT_STAGE_PATH"] = LIBRARY_SOURCE_FILE
+#         bpy.ops.wm.usd_import(filepath=LAYER_FILE)
+
+#         # # Importer will reset library filepath need to re-adjust
+#         # library = context.scene.usd_connect_libraries[-1]
+#         # library.file_path = LIBRARY_SOURCE_FILE
+
+#         bpy.utils.unregister_class(USDConnectorMetadataSet)
+#         # del os.environ["USD_CONNECT_STAGE_PATH"]
+
+#         for obj in to_remove:
+#             bpy.data.objects.remove(obj, do_unlink=True)
+
+#         return {'FINISHED'}
+
+
+# class USDConnectLibraryRefresh(bpy.types.Macro):
+#     bl_idname = "usd.connector_library_refresh"
+#     bl_label = "Refresh USD Library"
+#     bl_description = "Export overrides and reimport USD library"
+#     bl_options = {'REGISTER', 'UNDO'}
+
+
+# def register_library_refresh_macro():
+#     """Register the macro operations in the correct order"""
+#     op = USDConnectLibraryRefresh.define("usd.connector_library_export")
+#     op = USDConnectLibraryRefresh.define("usd.connector_library_reimport")
+
+
 classes = [
-    USDConnectorImporter,USDConnectorExporter
-]   
+    USDConnectorAddReference,
+    # USDConnectorAddReferenceSnapshot,
+    # USDConnectorAddReference,
+    USDConnectorExportLayer,
+    USDConnectLibraryRefresh,
+]
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    # register_add_reference_macro()
+
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls) 

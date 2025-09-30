@@ -31,6 +31,14 @@ class USDConnectLibraries(bpy.types.PropertyGroup):
         default="",
     )
 
+    export_path: bpy.props.StringProperty(  # type: ignore
+        name="Export Path",
+        description="Path to export the USD override file to",
+        default="",
+        subtype="FILE_PATH",
+    )
+
+
 class USDConnectIDProps(bpy.types.PropertyGroup):
     """Information specific to each Prim is stored here."""
 

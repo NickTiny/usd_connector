@@ -8,7 +8,9 @@ from pxr import Usd, UsdGeom, Sdf, Gf
 from typing import List, Any, Union
 from . import constants
 import math
-
+import os
+import shutil
+import tempfile
 
 IGNORE_PROPS = [
     "userProperties:blender:object_name",
@@ -363,41 +365,126 @@ def apply_world_transform(source_prim: Usd.Prim, target_prim: Usd.Prim) -> None:
     target_xform.GetScaleOp().Set(scale)
 
 
-def generate_usd_override_file(bl_stage: Usd.Stage) -> None:
-    # Create Stage to Generate Overrides onto
-    bl_stage_path = Path(bl_stage.GetRootLayer().realPath)
-    override_stage_path = bl_stage_path.parent.joinpath(
-        "layer_" + bl_stage_path.name
-    ).as_posix()
+def generate_usd_override_file(bl_stage: Usd.Stage, source_stage_path: str) -> None:
+    library = bpy.context.scene.usd_connect_libraries[0]
+    override_stage_path = library.export_path
+
     override_stage = Usd.Stage.CreateNew(override_stage_path)
 
-    for library in bpy.context.scene.usd_connect_libraries:
-        # Add reference to source stage in override file
-        source_stage = Usd.Stage.Open(library.file_path)
-        source_stage_path = Path(source_stage.GetRootLayer().realPath).as_posix()
+    # Add reference to source stage in override file
+    source_stage = Usd.Stage.Open(source_stage_path)
 
-        # TODO Need to filter out unused libraries (if the library objects don't have blender objects un then skip them)
-        if not source_stage_path in override_stage.GetRootLayer().subLayerPaths:
-            override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
+    override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
 
-        generate_usd_overrides_for_prims(   
-            source_stage=source_stage,
-            override_stage=override_stage,
-            bl_stage=bl_stage,
-        )
+    generate_usd_overrides_for_prims(
+        source_stage=source_stage,
+        override_stage=override_stage,
+        bl_stage=bl_stage,
+    )
 
-        BL_ROOT_PRIM = "/root"
+    # TODO Improve error handling on scaling when prim isn't found
+    # BL_ROOT_PRIM = "/root"
 
-        world_override = override_stage.OverridePrim(library.root_prim_path)
-        world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
+    # world_override = override_stage.OverridePrim(
+    #     "/" + library.root_prim_path.strip("/")
+    # )
+    # world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
 
-        if world_bl.IsValid() and world_override.IsValid():
-            apply_world_transform(world_bl, world_override)
+    # if world_bl.IsValid() and world_override.IsValid():
+    #     apply_world_transform(world_bl, world_override)
 
-        root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
-        root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
+    # root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
+    # root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
 
-        if root_bl.IsValid() and root_override.IsValid():
-            apply_world_transform(root_bl, root_override)
+    # if root_bl.IsValid() and root_override.IsValid():
+    #     apply_world_transform(root_bl, root_override)
+
+    library.export_path = override_stage_path
 
     override_stage.Save()
+    override_stage.Unload()
+
+
+def export_usd_layer(target_filepath: Path) -> None:
+    """Export the current scene to a USD file and generate overrides for the current library.
+
+    NOTE: Must be called with hook registered, similar to direct operator call"""
+
+    library = bpy.context.scene.usd_connect_libraries[0]
+
+    # Store Actual Export Path in Library
+    library.export_path = target_filepath.as_posix()
+
+    # Pass Temp Path to Operator, to generate full USD file first
+    # Hook will execute to generate override file at target filepath
+    tmp_filepath = target_filepath.parent.joinpath("tmp_" + target_filepath.name)
+
+    bpy.ops.wm.usd_export(filepath=tmp_filepath.as_posix())
+
+    # Delete Temp File after Layer is generated
+    if tmp_filepath.exists():
+        tmp_filepath.unlink()
+
+
+def export_refresh_usd_layer() -> None:
+    """Import a USD reference file and set up the library and prim mappings.
+
+    Args:
+        source_filepath (str): The file path of the source USD file to be used for overriding.
+        file_to_load (str | None, optional): Override the USD file to load. Defaults to None.
+    """
+    library = bpy.context.scene.usd_connect_libraries[0]
+
+    workspace = Path(library.file_path).parent
+    export_path = workspace.joinpath("refresh_export.usda")
+
+    old_filepath = library.file_path
+    library.file_path = library.file_path_snapshot
+
+    export_usd_layer(export_path)
+    library.file_path = old_filepath
+
+    export_stage = Usd.Stage.Open(export_path.as_posix())
+    export_stage.GetRootLayer().subLayerPaths.replace(
+        library.file_path_snapshot, old_filepath
+    )
+    export_stage.Save()
+
+
+def import_usd_reference(filepath, stage_filepath=None):
+    """Export the current scene to a USD file and generate overrides for the current library.
+
+    NOTE: Must be called with hook registered, similar to direct operator call"""
+    if not stage_filepath:
+        stage_filepath = filepath
+
+    source_file = Path(filepath)
+    libraries = bpy.context.scene.usd_connect_libraries
+
+    # TODO Due to exporter limitations we only support one library for now
+    libraries.clear()
+    library = libraries.add()
+
+    # Setup Basic Library Info
+    library.name = source_file.name
+    library.file_path = filepath
+
+    # Set Snapshot Path
+    snapshot_dir = source_file.parent.joinpath("usd_snapshots")
+    library.file_path_snapshot = snapshot_dir.joinpath(
+        "snapshot_" + source_file.name
+    ).as_posix()
+
+    # Set Export Path
+    library.export_path = source_file.parent.joinpath(
+        "layer_" + source_file.name
+    ).as_posix()
+
+    bpy.ops.wm.usd_import("EXEC_DEFAULT", filepath=stage_filepath)
+
+    bpy.app.timers.register(add_reference_snapshot, first_interval=1.0)
+
+
+def add_reference_snapshot():
+    library = bpy.context.scene.usd_connect_libraries[-1]
+    shutil.copy(library.file_path, library.file_path_snapshot)

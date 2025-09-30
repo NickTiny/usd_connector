@@ -11,7 +11,8 @@ TODOs
 - [x] Handle materials
 - [x] Create Custom Importer/Exporter so we can control settings 
 - [x] Handle scaling difference importer/exporter
-- [ ] Handle axis differences importer/exporter
+- [x] Add Logic to "reload" usd Scene 
+     - [x] Re-Open layer file 
 
 
 Things to consider
@@ -24,3 +25,6 @@ Things to consider
 Supporting Othr Datablock types
 - [x] Review how materials to support
 - [ ] Need to test other datablock types TODO
+
+Things to do later
+- [ ] Handle axis differences importer/exporter
