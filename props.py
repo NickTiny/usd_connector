@@ -10,13 +10,13 @@ class USDConnectLibraries(bpy.types.PropertyGroup):
         default="",
     )
 
-    file_path : bpy.props.StringProperty(  # type: ignore
-        name="File Path",
+    ref_file_path: bpy.props.StringProperty(  # type: ignore
+        name="Reference File Path",
         description="Path to the USD file that was imported, used as a library/reference.",
         default="",
     )
 
-    file_path_snapshot : bpy.props.StringProperty(  # type: ignore
+    snapshot_file_path: bpy.props.StringProperty(  # type: ignore
         name="File Path Snapshot",
         description=(
             "Snapshot of the USD file used at the time of import, used to calculate differences "

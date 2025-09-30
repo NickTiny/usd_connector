@@ -21,10 +21,7 @@ class USDConnectorAddReference(bpy.types.Operator):
         layout.prop(self, "filepath", text="USD File Path")
 
     def execute(self, context) -> {'FINISHED'}:
-
-        with core.override_usd_session_state(active=True):
-            core.import_usd_reference(self.filepath)
-
+        core.import_usd_reference(self.filepath)
         return {'FINISHED'}
 
     def invoke(self, context, event) -> {'RUNNING_MODAL'}:
@@ -48,9 +45,7 @@ class USDConnectorExportLayer(bpy.types.Operator):
             self.report({'ERROR'}, "USD Library not found.")
             return {'CANCELLED'}
 
-        with core.override_usd_session_state(active=True):
-            core.export_usd_layer(Path(self.filepath))
-
+        core.export_usd_layer(Path(self.filepath))
         return {'FINISHED'}
 
     def invoke(self, context, event) -> {'RUNNING_MODAL'}:
@@ -73,12 +68,10 @@ class USDConnectLibraryRefresh(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Export the current overrides
-        with core.override_usd_session_state(active=True, refresh=True):
-            core.refresh_export_usd_layer()
+        core.refresh_export_usd_layer()
 
-        # TODO setting interval to wait for export to finish need programmatic way to ensure export is complete
+        # Use timer to chain operators together and properly refresh depsgraph
         bpy.app.timers.register(core.refresh_library_import)
-
         return {'FINISHED'}
 
 

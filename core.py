@@ -18,14 +18,14 @@ from bpy.types import Object, ViewLayer
 ###############################################################
 # Export / Import Operations
 ###############################################################
-def import_usd_reference(filepath, stage_filepath=None):
+def import_usd_reference(ref_file_path: str, ref_stage=None):
     """Import a USD reference file and set up the library and prim mappings.
 
     NOTE: Must be called with hook registered, similar to direct operator call"""
-    if not stage_filepath:
-        stage_filepath = filepath
+    if not ref_stage:
+        ref_stage = ref_file_path
 
-    source_file = Path(filepath)
+    ref_pathlib = Path(ref_file_path)
     libraries = bpy.context.scene.usd_connect_libraries
 
     # TODO Due to exporter limitations we only support one library for now
@@ -33,27 +33,31 @@ def import_usd_reference(filepath, stage_filepath=None):
     library = libraries.add()
 
     # Setup Basic Library Info
-    library.name = source_file.name
-    library.file_path = filepath
+    library.name = ref_pathlib.name
+    library.ref_file_path = ref_file_path
 
     # Set Snapshot Path
-    snapshot_dir = source_file.parent.joinpath("usd_snapshots")
-    library.file_path_snapshot = snapshot_dir.joinpath(
-        "snapshot_" + source_file.name
+    snapshot_dir = ref_pathlib.parent.joinpath("usd_snapshots")
+    library.snapshot_file_path = snapshot_dir.joinpath(
+        "snapshot_" + ref_pathlib.name
     ).as_posix()
 
     # Set Export Path
-    library.export_path = source_file.parent.joinpath(
-        "layer_" + source_file.name
+    library.export_path = ref_pathlib.parent.joinpath(
+        "layer_" + ref_pathlib.name
     ).as_posix()
 
-    bpy.ops.wm.usd_import("EXEC_DEFAULT", filepath=stage_filepath)
+    with override_usd_session_state(active=True):
+        bpy.ops.wm.usd_import("EXEC_DEFAULT", filepath=ref_stage)
 
     bpy.app.timers.register(import_create_usd_snapshot, first_interval=1.0)
 
 
 def export_usd_layer(
-    target_filepath: Path, selected_objects_only: bool = False
+    target_filepath: Path,
+    selected_objects_only: bool = False,
+    session_active: bool = True,
+    session_refresh: bool = False,
 ) -> None:
     """Export the current scene to a USD file and generate overrides for the current library.
 
@@ -68,10 +72,12 @@ def export_usd_layer(
     # Hook will execute to generate override file at target filepath
     tmp_filepath = target_filepath.parent.joinpath("tmp_" + target_filepath.name)
 
-    bpy.ops.wm.usd_export(
-        filepath=tmp_filepath.as_posix(),
-        selected_objects_only=selected_objects_only,
-    )
+    with override_usd_session_state(active=session_active, refresh=session_refresh):
+
+        bpy.ops.wm.usd_export(
+            filepath=tmp_filepath.as_posix(),
+            selected_objects_only=selected_objects_only,
+        )
 
     # Delete Temp File after Layer is generated
     if tmp_filepath.exists():
@@ -80,7 +86,7 @@ def export_usd_layer(
 
 def import_create_usd_snapshot():
     library = bpy.context.scene.usd_connect_libraries[-1]
-    shutil.copy(library.file_path, library.file_path_snapshot)
+    shutil.copy(library.ref_file_path, library.snapshot_file_path)
 
 
 ##############################################################
@@ -99,21 +105,28 @@ def refresh_export_usd_layer() -> None:
 
     library_objects = get_library_objects(library)
 
-    workspace = Path(library.file_path).parent
+    workspace = Path(library.ref_file_path).parent
     export_path = workspace.joinpath("refresh_export.usda")
 
-    old_filepath = library.file_path
-    library.file_path = library.file_path_snapshot
-
-    with override_object_selection(
-        objects=library_objects, view_layer=bpy.context.view_layer
-    ):
-        export_usd_layer(export_path, selected_objects_only=True)
-    library.file_path = old_filepath
+    # Create an export aginst the snapshot file as opposed to the actual source file
+    # This way we can detect what changed since the last refresh and later
+    # Store these changes as overrides againist the snapshot
+    # Later we can reaload these overrides but againist the actual source file
+    # This way we can keep changes even if the source file changed
+    with override_library_filepaths(library, library.snapshot_file_path):
+        with override_object_selection(
+            objects=library_objects, view_layer=bpy.context.view_layer
+        ):
+            export_usd_layer(
+                export_path,
+                selected_objects_only=True,
+                session_active=True,
+                session_refresh=True,
+            )
 
     export_stage = Usd.Stage.Open(export_path.as_posix())
     export_stage.GetRootLayer().subLayerPaths.replace(
-        library.file_path_snapshot, old_filepath
+        library.snapshot_file_path, library.ref_file_path
     )
     export_stage.Save()
 
@@ -129,7 +142,7 @@ def refresh_library_import() -> None:
             old_objs.append(obj)
 
     with override_usd_session_state(active=True):
-        import_usd_reference(library.file_path, library.export_path)
+        import_usd_reference(library.ref_file_path, library.export_path)
 
     new_objs = [
         obj for obj in get_library_objects(library) if not obj.name.startswith("OLD_")
@@ -616,3 +629,22 @@ def override_usd_session_state(active: bool, refresh: bool = False):
     finally:
         usd_connect_session.active = org_active
         usd_connect_session.refresh = org_refresh
+
+
+@contextlib.contextmanager
+def override_library_filepaths(
+    library: bpy.types.PropertyGroup, file_path: str, snapshot_path: str | None = None
+):
+
+    org_file_path = library.ref_file_path
+    org_snapshot_path = library.snapshot_file_path
+
+    try:
+        library.ref_file_path = file_path
+        if snapshot_path:
+            library.snapshot_file_path = snapshot_path
+        yield
+    finally:
+        library.ref_file_path = org_file_path
+        if snapshot_path:
+            library.snapshot_file_path = org_snapshot_path
