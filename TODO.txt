@@ -20,8 +20,8 @@ TODOs
       - Session state tells hooks to execute or not and do options (Do Hook & DO Refresh)
       - Use wtih statements to enable/disable session state using contextmanager 
       - Move Registration of hook to normal registration
-- [ ] Resync using temp directory and clean up after the fact
-- [ ] Clean Up Test Files
+- [x] Resync using temp directory and clean up after the fact
+- [x] Clean Up Test Files
 - [ ] Diff logic V2 
    - Make snapshots an export from Blender USD
    - Compare current export to snapshot export to get difference
