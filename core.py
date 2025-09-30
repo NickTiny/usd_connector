@@ -13,7 +13,7 @@ import shutil
 import tempfile
 import contextlib
 from bpy.types import Object, ViewLayer
-
+from .prim_transfer import PrimTransfer
 
 ###############################################################
 # Export / Import Operations
@@ -233,16 +233,6 @@ IGNORE_PROPS = [
     "userProperties:blender:data_name",
 ]
 
-def get_override_prim(src_prim: Usd.Prim, override_stage: Usd.Stage) -> Usd.Prim:
-    try:
-        override_prim = override_stage.OverridePrim(src_prim.GetPath())
-    except Exception as e:
-        print(f"Error getting override prim: {e}")
-        return
-    print(f"PRIM: Overriding Prim: {src_prim.GetPath()}")
-    return override_prim
-
-
 def get_datablock_from_prim(blender_prim: Usd.Prim) -> dict:
     name = None
 
@@ -258,98 +248,6 @@ def get_datablock_from_prim(blender_prim: Usd.Prim) -> dict:
     data_block_type = constants.get_datablock_type(blender_prim.GetTypeName())
     if data_block_type:
         return data_block_type.get(name)
-
-
-def compare_usd_values(value1: Any, value2: Any, precision: int = 2) -> bool:
-    """Compare two USD values with customizable precision for floating point numbers.
-
-    This function handles various USD types including Vec3d, Vec3f, Vec2d, Vec2f,
-    matrices, quaternions, and other numerical types, rounding them to the specified
-    precision before comparison.
-
-    Args:
-        value1 (Any): First value to compare
-        value2 (Any): Second value to compare
-        precision (int): Number of decimal places to round to for floating point comparisons
-
-    Returns:
-        bool: True if values are equal (within precision), False otherwise
-    """
-    if value1 is None and value2 is None:
-        return True
-    if value1 is None or value2 is None:
-        return False
-
-    # Handle different USD types
-    if type(value1) != type(value2):
-        return False
-
-    if value1 == value2:
-        return True
-
-    # USD Array types (Vt.Vec3fArray, Vt.FloatArray, etc.)
-    if hasattr(value1, '__class__') and 'Array' in str(type(value1)):
-        try:
-            if len(value1) != len(value2):
-                return False
-            for i in range(len(value1)):
-                if not compare_usd_values(value1[i], value2[i], precision):
-                    return False
-            return True
-        except (TypeError, IndexError, AttributeError):
-            pass
-
-    # Vector types (Vec3d, Vec3f, Vec2d, Vec2f, etc.)
-    if hasattr(value1, '__len__') and hasattr(value1, '__getitem__'):
-        try:
-            if len(value1) != len(value2):
-                return False
-            for i in range(len(value1)):
-                if isinstance(value1[i], (float, int)):
-                    if round(float(value1[i]), precision) != round(
-                        float(value2[i]), precision
-                    ):
-                        return False
-                else:
-                    if value1[i] != value2[i]:
-                        return False
-            return True
-        except (TypeError, IndexError):
-            pass
-
-    # Matrix types (GfMatrix4d, GfMatrix3d, etc.)
-    if hasattr(value1, 'GetRow') and hasattr(value1, 'GetNumRows'):
-        try:
-            if value1.GetNumRows() != value2.GetNumRows():
-                return False
-            for row in range(value1.GetNumRows()):
-                if not compare_usd_values(
-                    value1.GetRow(row), value2.GetRow(row), precision
-                ):
-                    return False
-            return True
-        except (TypeError, AttributeError):
-            pass
-
-    # Quaternion types
-    if hasattr(value1, 'GetReal') and hasattr(value1, 'GetImaginary'):
-        try:
-            real_equal = round(float(value1.GetReal()), precision) == round(
-                float(value2.GetReal()), precision
-            )
-            imag_equal = compare_usd_values(
-                value1.GetImaginary(), value2.GetImaginary(), precision
-            )
-            return real_equal and imag_equal
-        except (TypeError, AttributeError):
-            pass
-
-    # Single floating point numbers
-    if isinstance(value1, (float, int)) and isinstance(value2, (float, int)):
-        return round(float(value1), precision) == round(float(value2), precision)
-
-    # Fallback to direct comparison for other types (strings, bools, etc.)
-    return value1 == value2
 
 
 def has_source_prim(blender_prim: Usd.Prim, source_stage: Usd.Stage) -> bool:
@@ -411,104 +309,6 @@ def get_matching_prims(source_stage:Usd.Stage, blender_prims:List[Usd.Prim]) -> 
     return matched_blender_prims    
 
 
-def override_property(
-    src_prim: Usd.Prim, trg_prop: Usd.Property, override_stage: Usd.Stage
-):
-    if trg_prop.GetName() in IGNORE_PROPS:
-        return
-    src_prop = src_prim.GetProperty(trg_prop.GetName())
-
-    if not src_prop:
-        print(f"PROP: Missing '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
-        return
-
-    if hasattr(src_prop, "GetTargets"):
-        if trg_prop.GetTargets() is None:
-            print(
-                f"PROP: Targets None '{trg_prop.GetName()}' on '{src_prim.GetPath()}'"
-            )
-            return
-        # Special Property Handling
-        if not compare_usd_values(src_prop.GetTargets(), trg_prop.GetTargets()):
-            override_prim = get_override_prim(src_prim, override_stage)
-            if not override_prim:
-                return
-            override_prim.GetProperty(trg_prop.GetName()).SetTargets(
-                trg_prop.GetTargets()
-            )
-            print(f"PROP: Overrided  '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
-            return
-
-    # Skip attributes that don't have get (relationships AFAIK)
-    if hasattr(trg_prop, "Get"):
-        if trg_prop.Get() is None:
-            print(
-                f"PROP: Targets None '{trg_prop.GetName()}' on '{src_prim.GetPath()}'"
-            )
-            return
-        if not compare_usd_values(src_prop.Get(), trg_prop.Get()):
-            override_prim = get_override_prim(src_prim, override_stage)
-            if not override_prim:
-                return
-            override_prim.GetProperty(trg_prop.GetName()).Set(trg_prop.Get())
-            print(f"PROP: Overrided '{trg_prop.GetName()}' on '{src_prim.GetPath()}'")
-            return
-
-
-def override_attribute(
-    src_prim: Usd.Prim,
-    trg_attr: Usd.Attribute,
-    override_stage: Usd.Stage,
-):
-
-    if trg_attr.GetName() in IGNORE_PROPS:
-        return
-    if trg_attr.Get() is None:
-        print(f"ATTR: Targets None '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
-        return
-
-    if src_prim.HasAttribute(trg_attr.GetName()):
-        src_value = src_prim.GetAttribute(trg_attr.GetName()).Get()
-        trg_value = trg_attr.Get()
-
-        if not compare_usd_values(src_value, trg_value):
-            override_prim = get_override_prim(src_prim, override_stage)
-            if not override_prim:
-                return
-            override_prim.GetAttribute(trg_attr.GetName()).Set(trg_attr.Get())
-            print(f"ATTR: Overrided '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
-    else:
-        override_prim = get_override_prim(src_prim, override_stage)
-        if not override_prim:
-            return
-        # Attribute doesn't exist on source prim, add it
-        override_prim.CreateAttribute(trg_attr.GetName(), trg_attr.GetTypeName()).Set(
-            trg_attr.Get()
-        )
-        print(f"ATTR: Created '{trg_attr.GetName()}' on '{src_prim.GetPath()}'")
-
-
-def override_prim_attributes_and_properties(
-    blender_prim: Usd.Prim, source_prim: Usd.Prim, override_stage: Usd.Stage
-) -> None:
-    """Override the attribute of a prim in the override stage if it differs from the source stage.
-
-    Args:
-        blender_prim (Usd.Prim): The Blender exported prim.
-        source_prim (Usd.Prim): The source prim to compare against.
-        override_stage (Usd.Stage): The override stage to apply changes to.
-    """
-    # TODO Handle in a more generic way and support other attributes
-    # This is good for demo purposes, but not a general solution
-
-    for bl_attr in blender_prim.GetAttributes():
-        override_attribute(source_prim, bl_attr, override_stage)
-
-    for bl_prop in blender_prim.GetProperties():
-        # If Property exists on source prim and value is different, override it
-        override_property(source_prim, bl_prop, override_stage)
-
-
 def get_unmatched_prims(blender_prims:List[Usd.Prim], matched_blender_prims:dict[Usd.Prim, Usd.Prim]) -> List[Usd.Prim]:
     """Get a list of unmatched Blender prims.
 
@@ -532,8 +332,7 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
 
     # Figure out if prims have been modified
     for bl_prim, src_prim in matched_prims.items():
-        # check_matching_prims(bl_prim, src_prim)
-        override_prim_attributes_and_properties(bl_prim, src_prim, override_stage)
+        PrimTransfer(bl_prim, src_prim, override_stage).generate_overrides()
 
     usd_connect_session = get_usd_connect_session()
     for unmatched in unmatched_prims:
