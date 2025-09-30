@@ -14,6 +14,198 @@ import tempfile
 import contextlib
 from bpy.types import Object, ViewLayer
 
+
+###############################################################
+# Export / Import Operations
+###############################################################
+def import_usd_reference(filepath, stage_filepath=None):
+    """Import a USD reference file and set up the library and prim mappings.
+
+    NOTE: Must be called with hook registered, similar to direct operator call"""
+    if not stage_filepath:
+        stage_filepath = filepath
+
+    source_file = Path(filepath)
+    libraries = bpy.context.scene.usd_connect_libraries
+
+    # TODO Due to exporter limitations we only support one library for now
+    libraries.clear()
+    library = libraries.add()
+
+    # Setup Basic Library Info
+    library.name = source_file.name
+    library.file_path = filepath
+
+    # Set Snapshot Path
+    snapshot_dir = source_file.parent.joinpath("usd_snapshots")
+    library.file_path_snapshot = snapshot_dir.joinpath(
+        "snapshot_" + source_file.name
+    ).as_posix()
+
+    # Set Export Path
+    library.export_path = source_file.parent.joinpath(
+        "layer_" + source_file.name
+    ).as_posix()
+
+    bpy.ops.wm.usd_import("EXEC_DEFAULT", filepath=stage_filepath)
+
+    bpy.app.timers.register(import_create_usd_snapshot, first_interval=1.0)
+
+
+def export_usd_layer(
+    target_filepath: Path, selected_objects_only: bool = False
+) -> None:
+    """Export the current scene to a USD file and generate overrides for the current library.
+
+    NOTE: Must be called with hook registered, similar to direct operator call"""
+
+    library = bpy.context.scene.usd_connect_libraries[0]
+
+    # Store Actual Export Path in Library
+    library.export_path = target_filepath.as_posix()
+
+    # Pass Temp Path to Operator, to generate full USD file first
+    # Hook will execute to generate override file at target filepath
+    tmp_filepath = target_filepath.parent.joinpath("tmp_" + target_filepath.name)
+
+    bpy.ops.wm.usd_export(
+        filepath=tmp_filepath.as_posix(),
+        selected_objects_only=selected_objects_only,
+    )
+
+    # Delete Temp File after Layer is generated
+    if tmp_filepath.exists():
+        tmp_filepath.unlink()
+
+
+def import_create_usd_snapshot():
+    library = bpy.context.scene.usd_connect_libraries[-1]
+    shutil.copy(library.file_path, library.file_path_snapshot)
+
+
+##############################################################
+# Refresh Functions
+##############################################################
+
+
+def refresh_export_usd_layer() -> None:
+    """Import a USD reference file and set up the library and prim mappings.
+
+    Args:
+        source_filepath (str): The file path of the source USD file to be used for overriding.
+        file_to_load (str | None, optional): Override the USD file to load. Defaults to None.
+    """
+    library = bpy.context.scene.usd_connect_libraries[0]
+
+    library_objects = get_library_objects(library)
+
+    workspace = Path(library.file_path).parent
+    export_path = workspace.joinpath("refresh_export.usda")
+
+    old_filepath = library.file_path
+    library.file_path = library.file_path_snapshot
+
+    with override_object_selection(
+        objects=library_objects, view_layer=bpy.context.view_layer
+    ):
+        export_usd_layer(export_path, selected_objects_only=True)
+    library.file_path = old_filepath
+
+    export_stage = Usd.Stage.Open(export_path.as_posix())
+    export_stage.GetRootLayer().subLayerPaths.replace(
+        library.file_path_snapshot, old_filepath
+    )
+    export_stage.Save()
+
+
+def refresh_library_import() -> None:
+    """Remove all objects associated with a given library name"""
+    library = bpy.context.scene.usd_connect_libraries[-1]
+
+    old_objs = []
+    for obj in bpy.context.scene.objects:
+        if obj.usd_connect_props.library_name == library.name:
+            obj.name = "OLD_" + obj.name
+            old_objs.append(obj)
+
+    with override_usd_session_state(active=True):
+        import_usd_reference(library.file_path, library.export_path)
+
+    new_objs = [
+        obj for obj in get_library_objects(library) if not obj.name.startswith("OLD_")
+    ]
+
+    # # Remap old objects to new objects based on root prim path
+    remap_dict = {}
+    unmapped_objs = []
+    for old_obj in old_objs:
+        matched = False
+        for new_obj in new_objs:
+            if (
+                old_obj.usd_connect_props.prim_path
+                == new_obj.usd_connect_props.prim_path
+            ):
+                remap_dict[old_obj] = new_obj
+                matched = True
+                break
+        if not matched:
+            unmapped_objs.append(old_obj)
+
+    for old_obj, new_obj in remap_dict.items():
+        old_obj.user_remap(new_obj)
+
+    # Remove Unused Objects
+    for unmapped_obj in unmapped_objs:
+        bpy.data.objects.remove(unmapped_obj, do_unlink=True)
+
+
+##############################################################
+# Hook Core Operations
+##############################################################
+def hook_export_overrides(bl_stage: Usd.Stage, source_stage_path: str) -> None:
+    library = bpy.context.scene.usd_connect_libraries[0]
+    override_stage_path = library.export_path
+
+    override_stage = Usd.Stage.CreateNew(override_stage_path)
+
+    # Add reference to source stage in override file
+    source_stage = Usd.Stage.Open(source_stage_path)
+
+    override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
+
+    generate_usd_overrides_for_prims(
+        source_stage=source_stage,
+        override_stage=override_stage,
+        bl_stage=bl_stage,
+    )
+
+    # TODO Improve error handling on scaling when prim isn't found
+    # BL_ROOT_PRIM = "/root"
+
+    # world_override = override_stage.OverridePrim(
+    #     "/" + library.root_prim_path.strip("/")
+    # )
+    # world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
+
+    # if world_bl.IsValid() and world_override.IsValid():
+    #     apply_world_transform(world_bl, world_override)
+
+    # root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
+    # root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
+
+    # if root_bl.IsValid() and root_override.IsValid():
+    #     apply_world_transform(root_bl, root_override)
+
+    library.export_path = override_stage_path
+
+    override_stage.Save()
+    override_stage.Unload()
+
+
+##############################################################################
+# Prim Compare
+##############################################################################
+
 IGNORE_PROPS = [
     "userProperties:blender:object_name",
     "userProperties:blender:data_name",
@@ -321,8 +513,15 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
         # check_matching_prims(bl_prim, src_prim)
         override_prim_attributes_and_properties(bl_prim, src_prim, override_stage)
 
+    usd_connect_session = get_usd_connect_session()
     for unmatched in unmatched_prims:
-        # print(f"PRIM: Skipped Unmatched: {unmatched.GetPath()}")
+
+        # During Refresh Skip anything that doesn't have a source prim set
+        if usd_connect_session.refresh:
+            if not unmatched.GetAttribute("userProperties:source_prm"):
+                continue
+            print(unmatched.GetPath())
+
         new_prim = override_stage.DefinePrim(
             unmatched.GetPath(), unmatched.GetTypeName()
         )
@@ -366,45 +565,27 @@ def apply_world_transform(source_prim: Usd.Prim, target_prim: Usd.Prim) -> None:
 
     target_xform.GetScaleOp().Set(scale)
 
+##############################################################
+# Helper Functions
+##############################################################
 
-def generate_usd_override_file(bl_stage: Usd.Stage, source_stage_path: str) -> None:
-    library = bpy.context.scene.usd_connect_libraries[0]
-    override_stage_path = library.export_path
 
-    override_stage = Usd.Stage.CreateNew(override_stage_path)
+def get_library_objects(library: bpy.types.Object) -> List[bpy.types.Object]:
+    """Get all objects associated with a specific USD library."""
+    return [
+        obj
+        for obj in bpy.context.scene.objects
+        if obj.usd_connect_props.library_get() == library
+    ]
 
-    # Add reference to source stage in override file
-    source_stage = Usd.Stage.Open(source_stage_path)
 
-    override_stage.GetRootLayer().subLayerPaths.append(source_stage_path)
+def get_usd_connect_session() -> bpy.types.PropertyGroup:
+    return bpy.context.window_manager.usd_connect_session
 
-    generate_usd_overrides_for_prims(
-        source_stage=source_stage,
-        override_stage=override_stage,
-        bl_stage=bl_stage,
-    )
 
-    # TODO Improve error handling on scaling when prim isn't found
-    # BL_ROOT_PRIM = "/root"
-
-    # world_override = override_stage.OverridePrim(
-    #     "/" + library.root_prim_path.strip("/")
-    # )
-    # world_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM + library.root_prim_path)
-
-    # if world_bl.IsValid() and world_override.IsValid():
-    #     apply_world_transform(world_bl, world_override)
-
-    # root_override = override_stage.OverridePrim(BL_ROOT_PRIM)
-    # root_bl = bl_stage.GetPrimAtPath(BL_ROOT_PRIM)
-
-    # if root_bl.IsValid() and root_override.IsValid():
-    #     apply_world_transform(root_bl, root_override)
-
-    library.export_path = override_stage_path
-
-    override_stage.Save()
-    override_stage.Unload()
+##############################################################
+# Context Managers
+##############################################################
 
 
 @contextlib.contextmanager
@@ -422,105 +603,16 @@ def override_object_selection(objects: List[Object], view_layer: ViewLayer):
             obj.select_set(object_states[obj], view_layer=view_layer)
 
 
-def export_usd_layer(
-    target_filepath: Path, selected_objects_only: bool = False
-) -> None:
-    """Export the current scene to a USD file and generate overrides for the current library.
+@contextlib.contextmanager
+def override_usd_session_state(active: bool, refresh: bool = False):
+    usd_connect_session = bpy.context.window_manager.usd_connect_session
+    org_active = usd_connect_session.active
+    org_refresh = usd_connect_session.refresh
 
-    NOTE: Must be called with hook registered, similar to direct operator call"""
-
-    library = bpy.context.scene.usd_connect_libraries[0]
-
-    # Store Actual Export Path in Library
-    library.export_path = target_filepath.as_posix()
-
-    # Pass Temp Path to Operator, to generate full USD file first
-    # Hook will execute to generate override file at target filepath
-    tmp_filepath = target_filepath.parent.joinpath("tmp_" + target_filepath.name)
-
-    bpy.ops.wm.usd_export(
-        filepath=tmp_filepath.as_posix(),
-        selected_objects_only=selected_objects_only,
-    )
-
-    # Delete Temp File after Layer is generated
-    if tmp_filepath.exists():
-        tmp_filepath.unlink()
-
-
-def get_library_objects(library: bpy.types.Object) -> List[bpy.types.Object]:
-    """Get all objects associated with a specific USD library."""
-    return [
-        obj
-        for obj in bpy.context.scene.objects
-        if obj.usd_connect_props.library_get() == library
-    ]
-
-
-def refresh_export_usd_layer() -> None:
-    """Import a USD reference file and set up the library and prim mappings.
-
-    Args:
-        source_filepath (str): The file path of the source USD file to be used for overriding.
-        file_to_load (str | None, optional): Override the USD file to load. Defaults to None.
-    """
-    library = bpy.context.scene.usd_connect_libraries[0]
-
-    library_objects = get_library_objects(library)
-
-    workspace = Path(library.file_path).parent
-    export_path = workspace.joinpath("refresh_export.usda")
-
-    old_filepath = library.file_path
-    library.file_path = library.file_path_snapshot
-
-    with override_object_selection(
-        objects=library_objects, view_layer=bpy.context.view_layer
-    ):
-        export_usd_layer(export_path, selected_objects_only=True)
-    library.file_path = old_filepath
-
-    export_stage = Usd.Stage.Open(export_path.as_posix())
-    export_stage.GetRootLayer().subLayerPaths.replace(
-        library.file_path_snapshot, old_filepath
-    )
-    export_stage.Save()
-
-
-def import_usd_reference(filepath, stage_filepath=None):
-    """Export the current scene to a USD file and generate overrides for the current library.
-
-    NOTE: Must be called with hook registered, similar to direct operator call"""
-    if not stage_filepath:
-        stage_filepath = filepath
-
-    source_file = Path(filepath)
-    libraries = bpy.context.scene.usd_connect_libraries
-
-    # TODO Due to exporter limitations we only support one library for now
-    libraries.clear()
-    library = libraries.add()
-
-    # Setup Basic Library Info
-    library.name = source_file.name
-    library.file_path = filepath
-
-    # Set Snapshot Path
-    snapshot_dir = source_file.parent.joinpath("usd_snapshots")
-    library.file_path_snapshot = snapshot_dir.joinpath(
-        "snapshot_" + source_file.name
-    ).as_posix()
-
-    # Set Export Path
-    library.export_path = source_file.parent.joinpath(
-        "layer_" + source_file.name
-    ).as_posix()
-
-    bpy.ops.wm.usd_import("EXEC_DEFAULT", filepath=stage_filepath)
-
-    bpy.app.timers.register(add_reference_snapshot, first_interval=1.0)
-
-
-def add_reference_snapshot():
-    library = bpy.context.scene.usd_connect_libraries[-1]
-    shutil.copy(library.file_path, library.file_path_snapshot)
+    try:
+        usd_connect_session.active = active
+        usd_connect_session.refresh = refresh
+        yield
+    finally:
+        usd_connect_session.active = org_active
+        usd_connect_session.refresh = org_refresh

@@ -14,14 +14,12 @@
 from . import usd_hook, props, ops, ui
 
 
+import_order = [props, ops, usd_hook, ui]
+
 def register():
-    usd_hook.register()
-    props.register()
-    ops.register()
-    ui.register()
+    for module in import_order:
+        module.register()
 
 def unregister():
-    usd_hook.unregister()
-    props.unregister()
-    ops.unregister()
-    ui.unregister()
+    for module in reversed(import_order):
+        module.unregister()

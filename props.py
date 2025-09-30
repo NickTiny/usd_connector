@@ -69,11 +69,27 @@ class USDConnectIDProps(bpy.types.PropertyGroup):
         return None
 
 
+class USDConnectSessionState(bpy.types.PropertyGroup):
+
+    active: bpy.props.BoolProperty(  # type: ignore
+        name="Active",
+        description="Whether USD Connect is active in this session",
+        default=False,
+    )
+
+    refresh: bpy.props.BoolProperty(  # type: ignore
+        name="Refresh",
+        description="Whether a refresh operation is in progress",
+        default=False,
+    )
+
+
 # ----------------REGISTER--------------.
 
 classes = [
     USDConnectLibraries,
     USDConnectIDProps, 
+    USDConnectSessionState
 ]
 
 
@@ -93,6 +109,11 @@ def register():
         type=USDConnectLibraries,
         description="List of USD libraries that have been imported into this scene",
     )
+    bpy.types.WindowManager.usd_connect_session = bpy.props.PointerProperty(
+        name="USD Connect Session",
+        type=USDConnectSessionState,
+        description="State information about the current USD Connect session",
+    )
 
 
 def unregister():
@@ -101,3 +122,4 @@ def unregister():
 
     del bpy.types.ID.usd_connect_props
     del bpy.types.Scene.usd_connect_libraries
+    del bpy.types.WindowManager.usd_connect_session
