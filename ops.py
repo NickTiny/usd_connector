@@ -68,10 +68,7 @@ class USDConnectLibraryRefresh(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Export the current overrides
-        core.refresh_export_usd_layer()
-
-        # Use timer to chain operators together and properly refresh depsgraph
-        bpy.app.timers.register(core.refresh_library_import)
+        core.refresh_usd_library()
         return {'FINISHED'}
 
 

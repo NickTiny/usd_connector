@@ -94,7 +94,12 @@ def import_create_usd_snapshot():
 ##############################################################
 
 
-def refresh_export_usd_layer() -> None:
+def refresh_usd_library() -> Path:
+    workspace = Path(tempfile.mkdtemp(prefix="usd_refresh_"))
+    refresh_export_usd_layer(workspace)
+
+
+def refresh_export_usd_layer(tmp_dir: Path) -> None:
     """Import a USD reference file and set up the library and prim mappings.
 
     Args:
@@ -105,8 +110,7 @@ def refresh_export_usd_layer() -> None:
 
     library_objects = get_library_objects(library)
 
-    workspace = Path(library.ref_file_path).parent
-    export_path = workspace.joinpath("refresh_export.usda")
+    export_path = tmp_dir.joinpath("refresh_export.usda")
 
     # Create an export aginst the snapshot file as opposed to the actual source file
     # This way we can detect what changed since the last refresh and later
@@ -130,8 +134,11 @@ def refresh_export_usd_layer() -> None:
     )
     export_stage.Save()
 
+    # Use timer to chain operators together and properly refresh depsgraph
+    bpy.app.timers.register(lambda: refresh_library_import(tmp_dir))
 
-def refresh_library_import() -> None:
+
+def refresh_library_import(tmp_dir: Path) -> None:
     """Remove all objects associated with a given library name"""
     library = bpy.context.scene.usd_connect_libraries[-1]
 
@@ -170,6 +177,8 @@ def refresh_library_import() -> None:
     # Remove Unused Objects
     for unmapped_obj in unmapped_objs:
         bpy.data.objects.remove(unmapped_obj, do_unlink=True)
+
+    shutil.rmtree(tmp_dir)
 
 
 ##############################################################
