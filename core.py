@@ -346,13 +346,16 @@ def generate_usd_overrides_for_prims(source_stage:Usd.Stage, override_stage:Usd.
         new_prim = override_stage.DefinePrim(
             unmatched.GetPath(), unmatched.GetTypeName()
         )
-        print(f"PRIM: Created New Prim: {new_prim.GetPath()}")
-        Sdf.CopySpec(
-            bl_stage.GetRootLayer(),
-            unmatched.GetPath(),
-            override_stage.GetRootLayer(),
-            new_prim.GetPath(),
-        )
+        try:
+            Sdf.CopySpec(
+                bl_stage.GetRootLayer(),
+                unmatched.GetPath(),
+                override_stage.GetRootLayer(),
+                new_prim.GetPath(),
+            )
+            print(f"PRIM: Created New Prim: {new_prim.GetPath()}")
+        except Exception as e:
+            print(f"Error copying spec for new prim {unmatched.GetPath()}: {e}")
 
 
 def apply_world_transform(source_prim: Usd.Prim, target_prim: Usd.Prim) -> None:
